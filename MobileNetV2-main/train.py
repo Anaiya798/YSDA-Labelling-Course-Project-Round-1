@@ -3,10 +3,14 @@ from typing import Tuple, Callable, Optional
 
 import numpy as np
 import torchvision.transforms.functional
+from torchvision.models import MobileNet_V2_Weights
+
 import wandb
 from albumentations.pytorch import ToTensorV2
 from torch.utils.data import Dataset, DataLoader
 import albumentations as A
+from tqdm import trange
+
 from utils import get_cosine_power_annealing_scheduler
 
 import cv2
@@ -26,7 +30,7 @@ class CarNumbersDataset(Dataset):
     def __len__(self) -> int:
         return len(self.data)
 
-    def __getitem__(self, index) -> Tuple[torch.FloatTensor, int]:
+    def __getitem__(self, index) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         image_path, label = self.data.iloc[index]
 
         image = cv2.imread(os.path.join(self.base_path, image_path))
@@ -35,7 +39,7 @@ class CarNumbersDataset(Dataset):
         if self.transform is not None:
             image = self.transform(image=image)['image']
 
-        return image, int(label)
+        return image, torch.FloatTensor([label])
 
     def calculate_mean_and_std(self):
         """
@@ -116,30 +120,37 @@ if __name__ == '__main__':
 
     # Calculate mean and std of the dataset
     dataset = CarNumbersDataset('../dataset/classification/train.csv')
+    print('Calculating mean and std of the dataset...')
     mean, std = dataset.calculate_mean_and_std()
     print(mean, std)
 
     # Make train dataset
     train_transform = A.Compose([
         A.LongestMaxSize(max_size=224),
+        A.PadIfNeeded(224, 224),
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),
     ])
+    print('Making train dataset...')
     train_dataset = CarNumbersDataset('../dataset/classification/train.csv', transform=train_transform)
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
 
     # Make test dataset
     test_transform = A.Compose([
         A.LongestMaxSize(max_size=224),
+        A.PadIfNeeded(224, 224),
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),
     ])
-    test_dataset = CarNumbersDataset('../dataset/classification/test.csv', transform=test_transform)
+    print('Making test dataset...')
+    test_dataset = CarNumbersDataset('../dataset/classification/train.csv', transform=test_transform)
     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=4)
 
     # Create model
-    model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True)
+    print('Creating model...')
+    model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', weights=MobileNet_V2_Weights.IMAGENET1K_V2)
     model.classifier[1] = torch.nn.Linear(1280, 1)
+    model = model.to(device)
 
     # Freeze layers (Optional)
     for param in model.features.parameters():
@@ -155,7 +166,7 @@ if __name__ == '__main__':
             'start_lr': 0.001,
             'momentum': 0.9,
             'weight_decay': 0.0001,
-            'nestrov': True,
+            'nesterov': True,
             'batch_size': 32,
             'model': 'MobileNetV2',
             'warmup_steps': 5,
@@ -171,10 +182,10 @@ if __name__ == '__main__':
             weight_decay=config.weight_decay, nesterov=config.nesterov,
         )
         scheduler = get_cosine_power_annealing_scheduler(
-            optimizer, config.warmup_steps, config.epochs, config.num_cycles, config.lr_gamma,
+            optimizer, config.warmup_steps, config.epochs, config.num_cycles, gamma=config.lr_gamma,
         )
 
-        for epoch in range(config.epochs):
+        for epoch in trange(config.epochs):
             train_loss = train(train_loader, model, loss_fn, optimizer, scheduler, device)
             wandb.log({'train_loss': train_loss}, step=epoch)
 
