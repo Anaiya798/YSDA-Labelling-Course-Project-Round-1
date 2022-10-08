@@ -124,6 +124,16 @@ if __name__ == '__main__':
     mean, std = dataset.calculate_mean_and_std()
     print(mean, std)
 
+    # Calculate dataset class balance
+    neg, pos = 0, 0
+    for _, label in dataset:
+        if label == 0:
+            neg += 1
+        else:
+            pos += 1
+    ratio = neg / pos
+    print(f'Dataset class balance: positive: {pos}, negative: {neg}, ratio: {ratio}')
+
     # Make train dataset
     train_transform = A.Compose([
         A.LongestMaxSize(max_size=224),
@@ -176,7 +186,7 @@ if __name__ == '__main__':
     ):
         config = wandb.config
 
-        loss_fn = torch.nn.BCEWithLogitsLoss()
+        loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=ratio * torch.ones(1))
         optimizer = torch.optim.SGD(
             model.parameters(), lr=config.start_lr, momentum=config.momentum,
             weight_decay=config.weight_decay, nesterov=config.nesterov,
