@@ -85,7 +85,7 @@ def train(
         loss_sum += optimizer_.step(closure)
         scheduler_.step()
 
-    current_lr_ = scheduler_.get_last_lr()[0]
+    current_lr_ = scheduler.optimizer.param_groups[0]['lr']
 
     return loss_sum / n_batches, current_lr_
 
