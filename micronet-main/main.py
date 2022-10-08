@@ -33,7 +33,7 @@ parser.add_argument('-d', '--data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--data-backend', metavar='BACKEND', default='pytorch',
                     choices=DATA_BACKEND_CHOICES)
-parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
+parser.add_argument('-a', '--arch', metavar='ARCH', default='MicroNet',
                     help='model architecture')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
