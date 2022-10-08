@@ -90,25 +90,25 @@ def test(dataloader: DataLoader, model_: torch.nn.Module, loss_fn_: Callable, de
     n_batches = len(dataloader)
     size = len(dataloader.dataset)
     loss = 0
-    tp, fp, tn, fn = 0, 0, 0, 0
+    tp_, fp_, tn_, fn_ = 0, 0, 0, 0
 
     with torch.no_grad():
         for X, y in dataloader:
             X, y = X.to(device_), y.to(device_)
             output = model_(X)
             loss += loss_fn_(output, y).item()
-            tp += ((output > 0.5) & (y == 1)).sum().item()
-            fp += ((output > 0.5) & (y == 0)).sum().item()
-            tn += ((output <= 0.5) & (y == 0)).sum().item()
-            fn += ((output <= 0.5) & (y == 1)).sum().item()
+            tp_ += ((output > 0.5) & (y == 1)).sum().item()
+            fp_ += ((output > 0.5) & (y == 0)).sum().item()
+            tn_ += ((output <= 0.5) & (y == 0)).sum().item()
+            fn_ += ((output <= 0.5) & (y == 1)).sum().item()
 
     loss /= n_batches
-    tp /= size
-    fp /= size
-    tn /= size
-    fn /= size
+    tp_ /= size
+    fp_ /= size
+    tn_ /= size
+    fn_ /= size
 
-    return loss, tp, fp, tn, fn
+    return loss, tp_, fp_, tn_, fn_
 
 
 if __name__ == '__main__':
