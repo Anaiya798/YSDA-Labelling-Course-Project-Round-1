@@ -111,8 +111,8 @@ def test(dataloader: DataLoader, model_: torch.nn.Module, loss_fn_: Callable, de
             fp_ += ((output > 0.5) & (y == 0)).sum().item()
             tn_ += ((output <= 0.5) & (y == 0)).sum().item()
             fn_ += ((output <= 0.5) & (y == 1)).sum().item()
-            all_outputs_.append(output)
-            all_labels_.append(y)
+            all_outputs_.append(output.cpu())
+            all_labels_.append(y.cpu())
 
     loss /= n_batches
     tp_ /= size
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     dataset = CarNumbersDataset('../dataset/classification/train.csv', transform=transform)
     print('Calculating mean and std of the dataset...')
     mean, std = dataset.calculate_mean_and_std()
-    print(mean, std)
+    print(f'Mean: {mean}, std: {std}')
 
     # Calculate dataset class balance
     print('Calculating dataset class balance...')
@@ -218,6 +218,8 @@ if __name__ == '__main__':
 
             if epoch % 10 == 0:
                 test_loss, tp, fp, tn, fn, predictions, ground_truth = test(train_loader, model, loss_fn, device)
+                predictions = torch.cat([1 - predictions, predictions], dim=1)
+
                 wandb.log({'test_loss': test_loss, 'tp': tp, 'fp': fp, 'tn': tn, 'fn': fn}, step=epoch)
                 wandb.log({"pr": wandb.plot.pr_curve(ground_truth, predictions)})
                 wandb.log({"roc": wandb.plot.roc_curve(ground_truth, predictions)})
