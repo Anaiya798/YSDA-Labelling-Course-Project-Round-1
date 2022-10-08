@@ -49,13 +49,14 @@ class CarNumbersDataset(Dataset):
         dataset_std = torch.zeros(3)
         nb_samples = 0
 
-        for image, label in self:
-            if isinstance(image, np.ndarray):
-                image = torchvision.transforms.functional.to_tensor(image)
+        for _ in range(5):
+            for image, _ in self:
+                if isinstance(image, np.ndarray):
+                    image = torchvision.transforms.functional.to_tensor(image)
 
-            nb_samples += 1
-            dataset_mean += image.mean(dim=(1, 2))
-            dataset_std += image.std(dim=(1, 2))
+                nb_samples += 1
+                dataset_mean += image.mean(dim=(1, 2))
+                dataset_std += image.std(dim=(1, 2))
 
         dataset_mean /= nb_samples
         dataset_std /= nb_samples
@@ -84,7 +85,9 @@ def train(
         loss_sum += optimizer_.step(closure)
         scheduler_.step()
 
-    return loss_sum / n_batches
+    current_lr_ = scheduler_.get_last_lr()[0]
+
+    return loss_sum / n_batches, current_lr_
 
 
 def test(dataloader: DataLoader, model_: torch.nn.Module, loss_fn_: Callable, device_: torch.device):
@@ -96,6 +99,9 @@ def test(dataloader: DataLoader, model_: torch.nn.Module, loss_fn_: Callable, de
     loss = 0
     tp_, fp_, tn_, fn_ = 0, 0, 0, 0
 
+    all_outputs_ = []
+    all_labels_ = []
+
     with torch.no_grad():
         for X, y in dataloader:
             X, y = X.to(device_), y.to(device_)
@@ -105,6 +111,8 @@ def test(dataloader: DataLoader, model_: torch.nn.Module, loss_fn_: Callable, de
             fp_ += ((output > 0.5) & (y == 0)).sum().item()
             tn_ += ((output <= 0.5) & (y == 0)).sum().item()
             fn_ += ((output <= 0.5) & (y == 1)).sum().item()
+            all_outputs_.append(output)
+            all_labels_.append(y)
 
     loss /= n_batches
     tp_ /= size
@@ -112,14 +120,25 @@ def test(dataloader: DataLoader, model_: torch.nn.Module, loss_fn_: Callable, de
     tn_ /= size
     fn_ /= size
 
-    return loss, tp_, fp_, tn_, fn_
+    all_outputs_ = torch.cat(all_outputs_, dim=0)
+    all_labels_ = torch.cat(all_labels_, dim=0)
+
+    return loss, tp_, fp_, tn_, fn_, all_outputs_, all_labels_
 
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f'Using device {device}')
 
     # Calculate mean and std of the dataset
-    dataset = CarNumbersDataset('../dataset/classification/train.csv')
+    transform = A.Compose([
+        A.LongestMaxSize(max_size=224),
+        A.PadIfNeeded(224, 224),
+        A.ShiftScaleRotate(p=0.5, rotate_limit=5),
+        A.ColorJitter(hue=0.02),
+        A.PixelDropout(drop_value=None, dropout_prob=0.02),
+    ])
+    dataset = CarNumbersDataset('../dataset/classification/train.csv', transform=transform)
     print('Calculating mean and std of the dataset...')
     mean, std = dataset.calculate_mean_and_std()
     print(mean, std)
@@ -137,8 +156,7 @@ if __name__ == '__main__':
 
     # Make train dataset
     train_transform = A.Compose([
-        A.LongestMaxSize(max_size=224),
-        A.PadIfNeeded(224, 224),
+        transform,
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),
     ])
@@ -148,8 +166,6 @@ if __name__ == '__main__':
 
     # Make test dataset
     test_transform = A.Compose([
-        A.LongestMaxSize(max_size=224),
-        A.PadIfNeeded(224, 224),
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),
     ])
@@ -184,7 +200,7 @@ if __name__ == '__main__':
             'num_cycles': 4,
             'lr_gamma': 0.5,
         },
-    ):
+    ) as run:
         config = wandb.config
 
         loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=ratio * torch.ones(1).to(device))
@@ -197,13 +213,15 @@ if __name__ == '__main__':
         )
 
         for epoch in trange(config.epochs):
-            train_loss = train(train_loader, model, loss_fn, optimizer, scheduler, device)
-            wandb.log({'train_loss': train_loss}, step=epoch)
+            train_loss, current_lr = train(train_loader, model, loss_fn, optimizer, scheduler, device)
+            wandb.log({'train_loss': train_loss, 'lr': current_lr}, step=epoch)
 
             if epoch % 10 == 0:
-                test_loss, tp, fp, tn, fn = test(train_loader, model, loss_fn, device)
+                test_loss, tp, fp, tn, fn, predictions, ground_truth = test(train_loader, model, loss_fn, device)
                 wandb.log({'test_loss': test_loss, 'tp': tp, 'fp': fp, 'tn': tn, 'fn': fn}, step=epoch)
+                wandb.log({"pr": wandb.plot.pr_curve(ground_truth, predictions)})
+                wandb.log({"roc": wandb.plot.roc_curve(ground_truth, predictions)})
 
-                model_weights_path = f'checkpoints/{config.model}_{epoch}.pt'
+                model_weights_path = f'checkpoints/{config.model}_{epoch}_{run.id}.pt'
                 torch.save(model.state_dict(), model_weights_path)
                 wandb.save(model_weights_path)
