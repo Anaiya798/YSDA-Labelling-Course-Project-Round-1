@@ -125,6 +125,7 @@ if __name__ == '__main__':
     print(mean, std)
 
     # Calculate dataset class balance
+    print('Calculating dataset class balance...')
     neg, pos = 0, 0
     for _, label in dataset:
         if label == 0:
@@ -163,8 +164,8 @@ if __name__ == '__main__':
     model = model.to(device)
 
     # Freeze layers (Optional)
-    for param in model.features.parameters():
-        param.requires_grad = False
+    # for param in model.features.parameters():
+    #     param.requires_grad = False
 
     # Train model and log metrics
     wandb.login()
@@ -186,7 +187,7 @@ if __name__ == '__main__':
     ):
         config = wandb.config
 
-        loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=ratio * torch.ones(1))
+        loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=ratio * torch.ones(1).to(device))
         optimizer = torch.optim.SGD(
             model.parameters(), lr=config.start_lr, momentum=config.momentum,
             weight_decay=config.weight_decay, nesterov=config.nesterov,
