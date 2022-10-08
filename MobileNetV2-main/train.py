@@ -1,5 +1,8 @@
 import os.path
 from typing import Tuple, Callable, Optional
+
+import numpy as np
+import torchvision.transforms.functional
 from torch.utils.data import Dataset
 
 import cv2
@@ -28,9 +31,27 @@ class CarNumbersDataset(Dataset):
         if self.transform is not None:
             image = self.transform(image=image)['image']
 
-        image = torch.from_numpy(image).float()
-
         return image, int(label)
+
+    def calculate_mean_and_std(self):
+        """
+        Calculates mean and std of the dataset
+        """
+        mean = torch.zeros(3)
+        std = torch.zeros(3)
+        nb_samples = 0
+
+        for image, label in self:
+            if isinstance(image, np.ndarray):
+                image = torchvision.transforms.functional.to_tensor(image)
+
+            nb_samples += 1
+            mean += image.mean(dim=(1, 2))
+            std += image.std(dim=(1, 2))
+
+        mean /= nb_samples
+        std /= nb_samples
+        return mean, std
 
 
 if __name__ == '__main__':
