@@ -95,7 +95,7 @@ def train(
     return loss_sum / n_batches, current_lr_
 
 
-def test(dataloader: DataLoader, model_: torch.nn.Module, loss_fn_: Callable, device_: torch.device):
+def val(dataloader: DataLoader, model_: torch.nn.Module, loss_fn_: Callable, device_: torch.device):
     """Test the `model` on the given dataset."""
     model_.eval()
 
@@ -238,7 +238,7 @@ if __name__ == '__main__':
             wandb.log({'train_loss': train_loss, 'lr': current_lr}, step=epoch)
 
             if epoch % 10 == 0:
-                test_loss, tp, fp, tn, fn, predictions, ground_truth = test(train_loader, model, loss_fn, device)
+                test_loss, tp, fp, tn, fn, predictions, ground_truth = val(val_loader, model, loss_fn, device)
                 predictions = torch.cat([1 - predictions, predictions], dim=1)
 
                 wandb.log({'test_loss': test_loss, 'tp': tp, 'fp': fp, 'tn': tn, 'fn': fn}, step=epoch)
