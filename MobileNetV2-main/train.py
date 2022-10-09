@@ -8,7 +8,7 @@ from torchvision.models import MobileNet_V2_Weights
 
 import wandb
 from albumentations.pytorch import ToTensorV2
-from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
+from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler, SequentialSampler
 import albumentations as A
 from tqdm import trange
 
@@ -177,7 +177,7 @@ if __name__ == '__main__':
     train_dataset = CarNumbersDataset('../dataset/classification/train.csv', transform=train_transform)
     train_sampler = SubsetRandomSampler(train_idx)
     train_loader = DataLoader(
-        train_dataset, batch_size=32, shuffle=True, num_workers=4,
+        train_dataset, batch_size=32, num_workers=4,
         sampler=train_sampler, pin_memory=True, drop_last=True,
     )
 
@@ -188,9 +188,9 @@ if __name__ == '__main__':
     ])
     print('Making test dataset...')
     val_dataset = CarNumbersDataset('../dataset/classification/train.csv', transform=val_transform)
-    val_sampler = SubsetRandomSampler(val_idx)
+    val_sampler = SequentialSampler(val_idx)
     val_loader = DataLoader(
-        val_dataset, batch_size=32, shuffle=False, num_workers=4,
+        val_dataset, batch_size=32, num_workers=4,
         sampler=val_sampler, pin_memory=True, drop_last=False,
     )
 
