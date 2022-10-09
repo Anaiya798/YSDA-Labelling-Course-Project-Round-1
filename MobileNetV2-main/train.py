@@ -1,4 +1,5 @@
 import os.path
+from copy import deepcopy
 from typing import Tuple, Callable, Optional
 from sklearn.model_selection import train_test_split
 
@@ -176,7 +177,7 @@ if __name__ == '__main__':
         ToTensorV2(),
     ])
     print('Making train dataset...')
-    train_dataset = Subset(dataset, train_idx)
+    train_dataset = Subset(deepcopy(dataset), train_idx)
     train_dataset.dataset.transform = train_transform
     train_loader = DataLoader(
         train_dataset, batch_size=32, num_workers=4,
@@ -185,11 +186,13 @@ if __name__ == '__main__':
 
     # Make validation dataset
     val_transform = A.Compose([
+        A.LongestMaxSize(max_size=224),
+        A.PadIfNeeded(224, 224),
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),
     ])
     print('Making test dataset...')
-    val_dataset = Subset(dataset, val_idx)
+    val_dataset = Subset(deepcopy(dataset), val_idx)
     val_dataset.dataset.transform = val_transform
     val_sampler = SequentialSampler(val_idx)
     val_loader = DataLoader(
