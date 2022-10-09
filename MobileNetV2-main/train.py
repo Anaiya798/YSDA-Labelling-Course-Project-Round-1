@@ -1,5 +1,6 @@
 import os.path
 from typing import Tuple, Callable, Optional
+from sklearn.model_selection import train_test_split
 
 import numpy as np
 import torchvision.transforms.functional
@@ -7,7 +8,7 @@ from torchvision.models import MobileNet_V2_Weights
 
 import wandb
 from albumentations.pytorch import ToTensorV2
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
 import albumentations as A
 from tqdm import trange
 
@@ -61,6 +62,10 @@ class CarNumbersDataset(Dataset):
         dataset_mean /= nb_samples
         dataset_std /= nb_samples
         return dataset_mean, dataset_std
+
+    @property
+    def labels(self) -> np.ndarray:
+        return self.data['label'].values
 
 
 def train(
@@ -154,6 +159,14 @@ if __name__ == '__main__':
     ratio = neg / pos
     print(f'Dataset class balance: positive: {pos}, negative: {neg}, ratio: {ratio}')
 
+    # Split for train and validation
+    train_idx, val_idx = train_test_split(
+        np.arange(len(dataset)),
+        test_size=0.2,
+        shuffle=True,
+        stratify=dataset.labels,
+    )
+
     # Make train dataset
     train_transform = A.Compose([
         transform,
@@ -162,16 +175,24 @@ if __name__ == '__main__':
     ])
     print('Making train dataset...')
     train_dataset = CarNumbersDataset('../dataset/classification/train.csv', transform=train_transform)
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
+    train_sampler = SubsetRandomSampler(train_idx)
+    train_loader = DataLoader(
+        train_dataset, batch_size=32, shuffle=True, num_workers=4,
+        sampler=train_sampler, pin_memory=True, drop_last=True,
+    )
 
-    # Make test dataset
-    test_transform = A.Compose([
+    # Make validation dataset
+    val_transform = A.Compose([
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),
     ])
     print('Making test dataset...')
-    test_dataset = CarNumbersDataset('../dataset/classification/train.csv', transform=test_transform)
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=4)
+    val_dataset = CarNumbersDataset('../dataset/classification/train.csv', transform=val_transform)
+    val_sampler = SubsetRandomSampler(val_idx)
+    val_loader = DataLoader(
+        val_dataset, batch_size=32, shuffle=False, num_workers=4,
+        sampler=val_sampler, pin_memory=True, drop_last=False,
+    )
 
     # Create model
     print('Creating model...')
