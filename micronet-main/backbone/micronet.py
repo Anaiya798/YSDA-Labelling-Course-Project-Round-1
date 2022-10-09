@@ -408,7 +408,7 @@ class DYMicroBlock(nn.Module):
 ###########################################################################
 
 class MicroNet(nn.Module):
-    def __init__(self, cfg, input_size=224, num_classes=2, teacher=False):
+    def __init__(self, cfg, input_size=224, num_classes=1000, teacher=False):
         super(MicroNet, self).__init__()
 
         mode = cfg.MODEL.MICRONETS.NET_CONFIG
